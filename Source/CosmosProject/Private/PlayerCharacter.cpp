@@ -56,7 +56,7 @@ APlayerCharacter::APlayerCharacter()
 	}
 
 	FPSCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("VRCamera"));
-	FPSCamera->SetupAttachment(GetMesh());
+	FPSCamera->SetupAttachment(RootComponent);
 	FPSCamera->bUsePawnControlRotation = false;
 	
 
