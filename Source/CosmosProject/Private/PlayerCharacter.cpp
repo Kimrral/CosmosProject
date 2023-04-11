@@ -117,6 +117,8 @@ void APlayerCharacter::Tick(float DeltaTime)
 		RightHand->SetRelativeRotation(FPSCamera->GetRelativeRotation());
 		RightAim->SetRelativeRotation(FPSCamera->GetRelativeRotation());
 	}
+
+	Grabbing();
 }
 
 // Called to bind functionality to input
@@ -132,6 +134,10 @@ void APlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		InputSystem->BindAction(IA_Look, ETriggerEvent::Triggered, this, &APlayerCharacter::Turn);
 		InputSystem->BindAction(IA_Jump, ETriggerEvent::Triggered, this, &APlayerCharacter::Jump);
 		InputSystem->BindAction(IA_Jump, ETriggerEvent::Completed, this, &APlayerCharacter::JumpEnd);
+		InputSystem->BindAction(IA_Fire, ETriggerEvent::Triggered, this, &APlayerCharacter::Fire);
+		InputSystem->BindAction(IA_Grab, ETriggerEvent::Triggered, this, &APlayerCharacter::TryGrab);
+		InputSystem->BindAction(IA_Grab, ETriggerEvent::Completed, this, &APlayerCharacter::UnTryGrab);
+
 	}
 }
 
@@ -171,3 +177,129 @@ void APlayerCharacter::JumpEnd()
 {
 	ACharacter::StopJumping();
 }
+
+void APlayerCharacter::Fire()
+{
+
+
+
+}
+
+void APlayerCharacter::TryGrab()
+{
+	// 중심점
+	FVector Center = RightHand->GetComponentLocation();
+	// 충돌체크(구충돌)
+	// 충돌한 물체들 기록할 배열
+	// 충돌 질의 작성
+	FCollisionQueryParams Param;
+	Param.AddIgnoredActor(this);
+	Param.AddIgnoredComponent(RightHand);
+	TArray<FOverlapResult> HitObjs;
+	bool bHit = GetWorld()->OverlapMultiByChannel(HitObjs, Center, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(GrabRange), Param);
+	// 충돌하지 않았다면 아무처리 하지 않는다.
+	if (bHit == false)
+	{
+		return;
+	}
+	// -> 가장 가까운 물체 잡도록 하자 (검출과정)
+
+	// 가장 가까운 물체 인덱스
+	int Closest = 0;
+	for (int i = 0; i < HitObjs.Num(); i++)
+	{
+		// 1. 물리 기능이 활성화 되어 있는 녀석만 판단
+		// -> 만약 부딪힌 컴포넌트가 물리기능이 비활성화 되어 있다면
+		if (HitObjs[i].GetComponent()->IsSimulatingPhysics() == false)
+		{
+			// 검출하고 싶지 않다.
+			continue;
+		}
+		// 잡았다!
+		IsGrabbed = true;
+
+		// 2. 현재 손과 가장 가까운 녀석과 이번에 검출할 녀석과 더 가까운 녀석이 있다면
+		// -> 필요속성 : 현재 가장가까운 녀석과 손과의 거리
+		float ClosestDist = FVector::Dist(HitObjs[Closest].GetActor()->GetActorLocation(), Center);
+		// -> 필요속성 : 이번에 검출할 녀석과 손과의 거리
+		float NextDist = FVector::Dist(HitObjs[i].GetActor()->GetActorLocation(), Center);
+		// 3. 만약 이번에가 현재꺼 보다 더 가깝다면
+		if (NextDist < ClosestDist)
+		{
+			//  -> 가장 가까운 녀석으로 변경하기
+			Closest = i;
+		}
+	}
+
+	// 만약 잡았다면
+	if (IsGrabbed)
+	{
+		GrabbedObject = HitObjs[Closest].GetComponent();
+		// -> 물체 물리기능 비활성화
+		GrabbedObject->SetSimulatePhysics(false);
+		GrabbedObject->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+		// -> 손에 붙여주자
+		GrabbedObject->AttachToComponent(RightHand, FAttachmentTransformRules::KeepWorldTransform);
+
+		PrevPos = RightHand->GetComponentLocation();
+		PrevRot = RightHand->GetComponentQuat();
+	}
+}
+
+void APlayerCharacter::UnTryGrab()
+{
+	if (IsGrabbed == false)
+	{
+		return;
+	}
+
+	// 1. 잡지않은 상태로 전환
+	IsGrabbed = false;
+	// 2. 손에서 떼어내기
+	GrabbedObject->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+	// 3. 물리기능 활성화
+	GrabbedObject->SetSimulatePhysics(true);
+	// 4. 충돌기능 활성화
+	GrabbedObject->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	// 던지기
+	GrabbedObject->AddForce(ThrowDirection * ThrowPower * GrabbedObject->GetMass());
+
+	// 회전 시키기
+	// 각속도 = (1 / dt) * dTheta(특정 축 기준 변위 각도 Axis, angle)
+	float Angle;
+	FVector Axis;
+	DeltaRotation.ToAxisAndAngle(Axis, Angle);
+	float dt = GetWorld()->DeltaTimeSeconds;
+	FVector AngularVelocity = (1.0f / dt) * Angle * Axis;
+	GrabbedObject->SetPhysicsAngularVelocityInRadians(AngularVelocity * ToquePower, true);
+
+	GrabbedObject = nullptr;
+}
+
+// 던질 정보를 업데이트하기위한 기능
+void APlayerCharacter::Grabbing()
+{
+	if (IsGrabbed == false)
+	{
+		return;
+	}
+
+	// 던질방향 업데이트
+	ThrowDirection = RightHand->GetComponentLocation() - PrevPos;
+	// 회전방향 업데이트
+	// 쿼터니온 공식
+	// Angle1 = Q1, Angle2 = Q2
+	// Angle1 + Angle2 = Q1 * Q2
+	// -Angle1 = Q1.Inverse()
+	// Angle2 - Angle1 = Q2 * Q1.Inverse()
+	DeltaRotation = RightHand->GetComponentQuat() * PrevRot.Inverse();
+
+	// 이전위치 업데이트
+	PrevPos = RightHand->GetComponentLocation();
+	// 이전회전값 업데이트
+	PrevRot = RightHand->GetComponentQuat();
+}
+
+
+

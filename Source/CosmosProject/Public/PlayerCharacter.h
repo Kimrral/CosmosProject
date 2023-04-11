@@ -34,9 +34,19 @@ public:
 	void Move(const FInputActionValue& Values);
 	void Jump();
 	void JumpEnd();
+	void Fire();
+	// 잡기 시도
+	void TryGrab();
+	// 잡기 해제
+	void UnTryGrab();
+	// 잡고있는중
+	void Grabbing();
 
 	UPROPERTY(BlueprintReadOnly)
 		class UCameraComponent* FPSCamera;
+
+	// 잡은 물체가 있는지 여부 기억할 변수
+	bool IsGrabbed = false;
 
 	// 필요속성 : 이동속도, 입력액션, 입력매핑컨텍스트
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
@@ -54,6 +64,8 @@ public:
 		class UInputAction* IA_Jump;
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 		class UInputAction* IA_Fire;
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+		class UInputAction* IA_Grab;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 		float XMovement;
@@ -74,6 +86,29 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 		class UInputMappingContext* IMC_Hand;
 
+	// 잡은 물체 기억
+	UPROPERTY()
+		class UPrimitiveComponent* GrabbedObject;
+
+	// 직전 위치
+	FVector PrevPos;
+	// 이전 회전값
+	FQuat PrevRot;
+	// 회전방향
+	FQuat DeltaRotation;
+
+	// 던질 방향
+	FVector ThrowDirection;
+	UPROPERTY(EditAnywhere, Category = "Grab")
+		float ThrowPower = 1000;
+
+
+	// 잡을 범위
+	UPROPERTY(EditDefaultsOnly, Category = "Grab")
+		float GrabRange = 100;
+	// 회전빠르기
+	UPROPERTY(EditAnywhere, Category = "Grab")
+		float ToquePower = 1000;
 
 
 

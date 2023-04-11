@@ -15,6 +15,13 @@ public:
 	// Sets default values for this actor's properties
 	APlayerWeapon();
 
+	UPROPERTY(EditDefaultsOnly, Category = MySettings)
+		class UBoxComponent* boxComp;
+	UPROPERTY(EditDefaultsOnly, Category = MySettings)
+	class UStaticMeshComponent* rifleComp;
+
+
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
